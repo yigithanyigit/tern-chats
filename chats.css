@@ -83,7 +83,7 @@ html.tn-status .tn-stage {
 }
 
 #panel {
-	left: calc(var(--chats-w) - 2px) !important;
+	left: calc(var(--chats-w) * var(--tn-zoom, 1) - 2px) !important;
 	width: auto !important;
 	right: 3px !important;
 }
