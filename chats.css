@@ -1,0 +1,445 @@
+/* The status line becomes a left sidebar listing chats on every host. */
+:root {
+	--chats-w: 248px;
+	--chats-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+}
+
+/* The status line no longer sits under the panes: give that room back. */
+html.tn-status .tn-stage {
+	bottom: max(0px, calc(var(--tn-home-clear) - var(--tn-pad-y))) !important;
+}
+
+#statusline {
+	position: fixed !important;
+	top: 40px !important;
+	left: 0 !important;
+	bottom: 0 !important;
+	right: auto !important;
+	width: var(--chats-w) !important;
+	height: auto !important;
+	display: flex !important;
+	flex-direction: column !important;
+	align-items: stretch !important;
+	justify-content: flex-start !important;
+	padding: 10px 4px 16px 10px !important;
+	background: none !important;
+	border: none !important;
+	overflow-y: auto;
+	font-family: var(--chats-font);
+}
+
+/* Tern's own status items (state dot, cwd, git, size) are hidden; only this plugin's rows stay. */
+#statusline > .sb-grp {
+	display: none !important;
+}
+
+#statusline > .sb-grp:has(.sl-plugins) {
+	order: -1;
+	display: block !important;
+	width: 100%;
+	height: auto;
+	margin: 0 !important;
+	padding: 0;
+	position: static !important;
+}
+
+#statusline .sb-grp > :not(.sl-plugins) {
+	display: none !important;
+}
+
+#statusline .sl-plugins {
+	display: flex !important;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0 !important;
+	width: 100%;
+	height: auto;
+	margin: 0 !important;
+	position: static !important;
+}
+
+#statusline .sl-plugins > .sl-plugin {
+	margin-left: 0 !important;
+	margin-right: 0 !important;
+}
+
+/* Tern draws its own border, ring and background on status segments; the card replaces them. */
+#statusline .sl-plugin[data-plugin='chats'],
+#statusline .sl-plugin[data-plugin='chats']:hover,
+#statusline .sl-plugin[data-plugin='chats']:focus,
+#statusline .sl-plugin[data-plugin='chats']:focus-visible,
+#statusline .sl-plugin[data-plugin='chats']:active {
+	border: 0 !important;
+	outline: 0 !important;
+	box-shadow: none !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']::after {
+	display: none !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:not(:hover) {
+	background: transparent;
+}
+
+#panel {
+	left: calc(var(--chats-w) - 2px) !important;
+	width: auto !important;
+	right: 3px !important;
+}
+
+/* Every row */
+#statusline .sl-plugin[data-plugin='chats'] {
+	display: block;
+	font-family: var(--chats-font);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: default;
+	transition: background 0.12s, color 0.12s;
+}
+
+/* Host headers */
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='host'] {
+	margin: 18px 0 4px;
+	padding: 0 10px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	line-height: 16px;
+	color: var(--t3);
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='host']:first-child {
+	margin-top: 2px;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='host']:hover,
+#statusline .sl-plugin[data-plugin='chats'][data-tone='host-on'] {
+	color: var(--t2);
+}
+
+/* Chat card: one element, two lines; the first line is the name */
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']) {
+	position: relative;
+	margin-top: 2px;
+	padding: 7px 10px 7px 24px;
+	border-radius: 8px;
+	white-space: pre;
+	text-overflow: clip;
+	font-size: 11.5px;
+	font-weight: 400;
+	line-height: 17px;
+	color: var(--t3);
+}
+
+
+/* State dot */
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input'])::before {
+	content: '';
+	position: absolute;
+	left: 10px;
+	top: 13px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--t3);
+	opacity: 0.5;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone$='working']::before {
+	background: var(--accent, #8b7cf6);
+	opacity: 1;
+	animation: chats-pulse 1.6s ease-in-out infinite;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone$='waiting_input']::before {
+	background: #e5a50a;
+	opacity: 1;
+}
+
+@keyframes chats-pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+/* Hover and the open chat */
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover {
+	background: rgba(255, 255, 255, 0.045) !important;
+}
+
+#statusline .sl-plugin.sl-plugin[data-plugin='chats'][data-tone^='on-'][data-tone^='on-'] {
+	background: light-dark(var(--card), rgba(255, 255, 255, 0.085)) !important;
+	color: var(--t2);
+}
+
+/* New chat */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='new'] {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 2px;
+	padding: 6px 10px;
+	border-radius: 8px;
+	font-size: 12.5px;
+	color: var(--t3);
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='new']:hover {
+	background: rgba(255, 255, 255, 0.045) !important;
+	color: var(--t1);
+}
+
+/* Shortcut legend at the bottom: the list fills the column so the legend can sit last. */
+#statusline > .sb-grp:has(.sl-plugins),
+#statusline .sl-plugins {
+	flex: 1 1 auto;
+	min-height: 100%;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='keys'] {
+	padding: 4px 10px;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--t3);
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='keys-first'] {
+	margin-top: auto;
+	padding-top: 14px;
+	border-top: 1px solid var(--l1) !important;
+}
+
+/* The key chip rides on its label's line, at the right edge. */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='kbd'] {
+	align-self: flex-end;
+	margin: -23px 8px 3px 0 !important;
+	padding: 0 6px;
+	border-radius: 5px;
+	background: rgba(255, 255, 255, 0.06) !important;
+	box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05) !important;
+	font-family: var(--chats-font);
+	font-size: 11px;
+	line-height: 18px;
+	letter-spacing: 0.04em;
+	color: var(--t2);
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone^='keys']):hover,
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone^='keys']):has(+ [data-tone='kbd']:hover) {
+	color: var(--t1);
+	background: transparent !important;
+}
+
+/* Second chip on the Width line, left of the first. */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='kbd-l'] {
+	align-self: flex-end;
+	margin: -21px 56px 3px 0 !important;
+	padding: 0 6px;
+	border-radius: 5px;
+	background: rgba(255, 255, 255, 0.06) !important;
+	box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05) !important;
+	font-family: var(--chats-font);
+	font-size: 11px;
+	line-height: 18px;
+	letter-spacing: 0.04em;
+	color: var(--t2);
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone='kbd'], [data-tone='kbd-l']):hover {
+	background: rgba(255, 255, 255, 0.12) !important;
+	color: var(--t1);
+}
+
+/* Host header "+" (new chat on that host), on the header's line at the right. */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='host-add'] {
+	align-self: flex-end;
+	margin: -21px 6px 4px 0 !important;
+	padding: 0 7px;
+	border-radius: 5px;
+	font-size: 15px;
+	line-height: 20px;
+	color: var(--t3);
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='host-add']:hover {
+	background: rgba(255, 255, 255, 0.08) !important;
+	color: var(--t1);
+}
+
+/* "▾ Closed 2": folds the host's closed chats. */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='recent-head'] {
+	margin: 6px 0 2px;
+	padding: 3px 10px;
+	border-radius: 6px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--t3);
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='recent-head']:hover {
+	color: var(--t2);
+	background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Closed chat: same card as an open one, hollow ring instead of a dot, dimmer. */
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']) {
+	position: relative;
+	margin-top: 2px;
+	padding: 7px 30px 7px 24px;
+	border-radius: 8px;
+	white-space: pre;
+	text-overflow: clip;
+	font-size: 11.5px;
+	line-height: 17px;
+	color: var(--t3);
+	opacity: 0.8;
+}
+
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head'])::before {
+	content: '';
+	position: absolute;
+	left: 9px;
+	top: 12px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	border: 1px solid var(--t3);
+	box-sizing: border-box;
+	opacity: 0.8;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']):hover {
+	opacity: 1;
+	background: rgba(255, 255, 255, 0.045) !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone='del'], [data-tone='del-armed']) {
+	align-self: flex-end;
+	margin: -24px 8px 2px 0 !important;
+	padding: 1px 8px !important;
+	font-size: 13px !important;
+	padding: 0 6px;
+	border-radius: 5px;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--t3);
+	opacity: 0;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']):hover + [data-tone='del'],
+#statusline .sl-plugin[data-plugin='chats'][data-tone='del']:hover {
+	opacity: 1;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='del']:hover {
+	background: rgba(255, 255, 255, 0.1) !important;
+	color: var(--t1);
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='del-armed'] {
+	opacity: 1;
+	background: rgba(229, 72, 77, 0.18) !important;
+	color: #ff8a8e;
+}
+
+/* Forks: a tree like Claude's. Each level steps in 16px; a vertical guide runs under the
+   parent's dot, and the last child's guide bends into its own dot (└). */
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone^='recent-f1']) {
+	margin-left: 6px !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f2'], [data-tone^='recent-f2']) {
+	margin-left: 22px !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f3'], [data-tone^='recent-f3']) {
+	margin-left: 38px !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f']) {
+	margin-top: 0 !important;
+	padding-left: 34px !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f'])::before {
+	left: 22px !important;
+}
+
+#statusline .sl-plugin.sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f'])::after {
+	display: block !important;
+	content: '';
+	position: absolute;
+	left: 7px;
+	top: 0;
+	bottom: 0;
+	width: 10px;
+	border-left: 1px solid var(--l1);
+}
+
+#statusline .sl-plugin.sl-plugin[data-plugin='chats']:is([data-tone*='f1L'], [data-tone*='f2L'], [data-tone*='f3L'], [data-tone$='L'])::after {
+	bottom: auto;
+	height: 15px;
+	border-bottom: 1px solid var(--l1);
+	border-bottom-left-radius: 7px;
+}
+
+/* ⑂ fork button: shows on hover, top right of its card (left of × on closed chats). */
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone='more'], [data-tone='more']) {
+	align-self: flex-end;
+	margin: -24px 8px 2px 0 !important;
+	padding: 1px 9px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 18px;
+	color: var(--t2);
+	background: light-dark(var(--card), rgb(52, 50, 58)) !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+	opacity: 0;
+}
+
+#statusline .sl-plugin[data-plugin='chats'][data-tone='more'] {
+	margin-right: 36px !important;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover + [data-tone='more'],
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:hover + [data-tone='more'],
+#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:hover + [data-tone='more'] + [data-tone='del'],
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone='more'], [data-tone='more']):hover,
+#statusline .sl-plugin[data-plugin='chats'][data-tone='more']:hover + [data-tone='del'] {
+	opacity: 1;
+}
+
+#statusline .sl-plugin[data-plugin='chats']:is([data-tone='more'], [data-tone='more']):hover {
+	background: var(--accent, #8b7cf6) !important;
+	color: #fff;
+}
+
+/* Tern's CSS can't chain two siblings off :hover, so × stays faintly visible on closed chats. */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='del'] {
+	opacity: 0.35;
+}
+
+/* ⋯ chip: a compact round button */
+#statusline .sl-plugin[data-plugin='chats'][data-tone='more'] {
+	margin-right: 8px !important;
+	padding: 0 8px !important;
+	font-size: 15px !important;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+}
+
+/* Delete rows in the chat menus: red. cx:pick drops row tones, so this keys on the menus'
+   shape: rows, then one group break near the end, Delete last. Tern's own pickers start
+   with a group header or have none, so they don't match. */
+.tn-pl-list:has(> .ck-item:first-child):has(> .ck-group:nth-last-child(-n+3)) > .ck-item:last-child :is(.ck-label, .ck-sub, .ck-ic) {
+	color: #ff6b6b !important;
+}
+
+.tn-pl-list:has(> .ck-item:first-child):has(> .ck-group:nth-last-child(-n+3)) > .ck-item.sel:last-child {
+	background: rgba(229, 72, 77, 0.16) !important;
+}

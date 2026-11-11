@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+# Recent omp sessions on this machine as JSON lines: {id, title, cwd, mtime}. Newest first.
+# usage: omp-recent [N] | omp-recent --delete <id> (permanent)
+#     (default 15). Reads only the first two lines of each session file;
+# untitled sessions use their first prompt; skips empty sessions and older links of a compaction chain.
+import json
+import sys
+from pathlib import Path
+
+SESSIONS = Path.home() / ".omp/agent/sessions"
+if sys.argv[1:2] == ["--folders"]:
+    # omp-recent --folders: the projects root, then its folders, newest first. The root is
+    # $OMP_PROJECTS (":"-separated for several), else the first of ~/Desktop/projects,
+    # ~/projects, ~/code, ~/src that exists, else ~.
+    import os
+    env = os.environ.get("OMP_PROJECTS")
+    if env:
+        roots = [Path(p).expanduser() for p in env.split(":") if p]
+    else:
+        roots = [p for p in (Path.home() / d for d in ("Desktop/projects", "projects", "code", "src")) if p.is_dir()][:1]
+    roots = [r.resolve() for r in roots if r.is_dir()] or [Path.home()]
+    print(json.dumps({"root": str(roots[0]), "home": str(Path.home())}))
+    found = {}
+    for root in roots:
+        if root.is_dir():
+            for d in root.iterdir():
+                if d.is_dir() and not d.name.startswith("."):
+                    found[str(d.resolve())] = d.stat().st_mtime
+    for path, _ in sorted(found.items(), key=lambda kv: -kv[1]):
+        print(json.dumps({"path": path}))
+    sys.exit(0)
+
+if sys.argv[1:2] == ["--ls"]:
+    # omp-recent --ls <dir>: its subfolders as JSON lines {name, path}, by name; "~" works.
+    d = Path(sys.argv[2]).expanduser().resolve()
+    try:
+        subs = sorted((x for x in d.iterdir() if x.is_dir() and not x.name.startswith(".")), key=lambda x: x.name.lower())
+    except OSError as e:
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
+    print(json.dumps({"here": str(d)}))
+    for x in subs:
+        print(json.dumps({"name": x.name, "path": str(x)}))
+    sys.exit(0)
+
+if sys.argv[1:2] == ["--mkdir"]:
+    # omp-recent --mkdir <dir>: create a folder (and its parents); prints its path.
+    d = Path(sys.argv[2]).expanduser()
+    d.mkdir(parents=True, exist_ok=True)
+    print(json.dumps({"path": str(d.resolve())}))
+    sys.exit(0)
+
+if sys.argv[1:2] == ["--delete"]:
+    # omp-recent --delete <id>: delete the session file and its artifacts folder, permanently.
+    import shutil
+    files = list(SESSIONS.glob(f"*/*_{sys.argv[2]}.jsonl"))
+    for f in files:
+        art = f.with_suffix("")
+        if art.is_dir():
+            shutil.rmtree(art)
+        f.unlink()
+    sys.exit(0 if files else 1)
+
+def last_reply(f):
+    """The start of the last assistant text in the session (to tell same-titled chats apart)."""
+    try:
+        with f.open("rb") as fh:
+            fh.seek(0, 2)
+            fh.seek(max(0, fh.tell() - 262144))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        if '"role":"assistant"' not in line:
+            continue
+        try:
+            content = json.loads(line).get("message", {}).get("content")
+        except ValueError:
+            continue
+        if isinstance(content, list):
+            text = " ".join(c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text")
+            text = " ".join(text.split())
+            if text:
+                return text[:120]
+    return ""
+
+
+def first_prompt(f):
+    """The first thing typed in an untitled session, else None (it never got a message)."""
+    try:
+        with f.open() as fh:
+            for i, line in enumerate(fh):
+                if i > 400:
+                    return None
+                if '"role":"user"' not in line:
+                    continue
+                msg = json.loads(line).get("message", {})
+                content = msg.get("content")
+                text = content if isinstance(content, str) else " ".join(
+                    c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text")
+                text = " ".join(text.split())
+                if text:
+                    return text[:80]
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def held_by_panes():
+    """{session id: Tern pane id} for omp chats running in Tern panes on this machine.
+    Tern knows each pane's process; the process holds its session file open."""
+    import os
+    import subprocess
+    env = dict(os.environ)
+    if sys.platform.startswith("linux"):
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    import shutil
+    tern = shutil.which("tern") or str(Path.home() / ".local/bin/tern")
+
+    def run(*args):
+        if args[0] == "tern":
+            args = (tern,) + args[1:]
+        try:
+            return subprocess.run(args, capture_output=True, text=True, timeout=5, env=env).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+    try:
+        sessions = json.loads(run("tern", "ls", "--json") or "{}").get("sessions", [])
+    except ValueError:
+        return {}
+    out = {}
+    for sess in sessions:
+        for tab in sess.get("tabs", []):
+            for block in tab.get("blocks", []):
+                try:
+                    proc = json.loads(run("tern", "process", str(block["id"]), "--json") or "{}")
+                except ValueError:
+                    continue
+                pid = (proc.get("foreground") or {}).get("pid")
+                if not pid:
+                    continue
+                if sys.platform.startswith("linux"):
+                    try:
+                        paths = [os.readlink(f"/proc/{pid}/fd/{fd}") for fd in os.listdir(f"/proc/{pid}/fd")]
+                    except OSError:
+                        paths = []
+                else:
+                    paths = [l[1:] for l in run("lsof", "-p", str(pid), "-Fn").splitlines() if l.startswith("n")]
+                sid = None
+                for path in paths:
+                    if path.endswith(".jsonl") and "/sessions/" in path:
+                        sid = Path(path).stem.split("_", 1)[-1]
+                # Linux omp doesn't keep the file open: `--resume <id>` names it; a new chat or fork
+                # made its file when the process started, in its cwd's session folder.
+                argv = (proc.get("foreground") or {}).get("argv") or []
+                if not sid and "--resume" in argv[:-1]:
+                    sid = argv[argv.index("--resume") + 1]
+                if not sid:
+                    sid = started_session(pid, (proc.get("foreground") or {}).get("cwd") or "", run)
+                if sid:
+                    out[sid] = block["id"]
+    return out
+
+
+def started_session(pid, cwd, run):
+    """The session file created within 2 minutes after process `pid` started, in `cwd`."""
+    import calendar
+    import time
+    try:
+        start = time.mktime(time.strptime(run("ps", "-o", "lstart=", "-p", str(pid)).strip(), "%a %b %d %H:%M:%S %Y"))
+    except ValueError:
+        return None
+    folder = "-" + cwd.strip("/").replace("/", "-")
+    best = None
+    for d in SESSIONS.iterdir():
+        if not (d.name == folder or d.name == "-" + folder + "-" or d.name.strip("-") == folder.strip("-")):
+            continue
+        for f in d.glob("*.jsonl"):
+            try:
+                made = calendar.timegm(time.strptime(f.name[:19], "%Y-%m-%dT%H-%M-%S"))  # name is UTC
+            except ValueError:
+                continue
+            if 0 <= made - start <= 120 and (best is None or made < best[0]):
+                best = (made, f.stem.split("_", 1)[-1])
+    return best and best[1]
+
+
+panes = held_by_panes()
+# Extra fork links for sessions omp didn't fork itself (e.g. imported from Claude Code, where a
+# worktree chat belongs under the main checkout's chat): {"<child id>": "<parent id>"}.
+try:
+    LINKS = json.loads((SESSIONS.parent / "chats-parents.json").read_text())
+except (OSError, ValueError):
+    LINKS = {}
+n = int(sys.argv[1]) if len(sys.argv) > 1 else 15
+files = sorted(SESSIONS.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+seen, continued = set(), set()
+for f in files:
+    if len(seen) >= n:
+        break
+    title, info = None, {}
+    try:
+        with f.open() as fh:
+            for _ in range(2):
+                rec = json.loads(fh.readline() or "{}")
+                if rec.get("type") == "title":
+                    title = rec.get("title")
+                elif rec.get("type") == "session":
+                    info = rec
+    except (OSError, ValueError):
+        continue
+    sid, title, cwd = info.get("id"), title or info.get("title"), info.get("cwd") or ""
+    if not title:
+        title = first_prompt(f)
+    # Sessions with no message are skipped; of a compaction chain only the newest link shows.
+    # Forks keep their own entry even with the same title.
+    if not sid or not title or sid in continued:
+        continue
+    if info.get("continuationOf"):
+        continued.add(info["continuationOf"])
+    seen.add(sid)
+    # parent: the session this one was forked from (a compaction continuation is not a fork)
+    parent = None if info.get("continuationOf") else info.get("parentSession")
+    parent = parent or LINKS.get(sid)
+    print(json.dumps({"id": sid, "title": title, "cwd": cwd, "mtime": int(f.stat().st_mtime), "parent": parent, "last": last_reply(f), "pane": panes.get(sid)}, ensure_ascii=False))
