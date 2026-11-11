@@ -473,20 +473,27 @@ function rebuild(cx)
 			table.insert(segs, { text = "⌃⌘[", tone = "kbd-l", command = "plugin.chats.narrower" })
 		end
 	end
-	-- Hovering a chat lights its tab as hovering the tab would. A row's title attribute is its command.
+	-- Hovering a chat lights its tab, and hovering a tab lights its chats, as hovering them would.
+	-- A row's title attribute is its command.
 	local tab_pos = {}
 	for _, t in cx.session:tabs() do
 		tab_pos[t.id] = t.position
 	end
-	local lit = {}
+	local tabs_lit, chats_lit = {}, {}
 	for i, slot in chat_slots do
 		local info = slot.current and cx.session:pane(slot.pane)
 		local p = info and info.tab and tab_pos[info.tab]
 		if p then
-			table.insert(lit, string.format("html:has(#statusline .sl-plugin[title='plugin.chats.go%d']:hover) #tabbar .tb-tabs > .tt:nth-child(%d)", i, p))
+			local chat = string.format("#statusline .sl-plugin[title='plugin.chats.go%d']", i)
+			local tab = string.format("#tabbar .tb-tabs > .tt:nth-child(%d)", p)
+			table.insert(tabs_lit, string.format("html:has(%s:hover) %s", chat, tab))
+			table.insert(chats_lit, string.format("html:has(%s:hover) %s", tab, chat))
 		end
 	end
-	tern.css("tabs", #lit > 0 and (table.concat(lit, ",\n") .. " { color: var(--t1); background-color: var(--l1); }") or "")
+	tern.css("tabs", #tabs_lit > 0 and (
+		table.concat(tabs_lit, ",\n") .. " { color: var(--t1); background-color: var(--l1); }\n"
+		.. table.concat(chats_lit, ",\n") .. " { background: rgba(255, 255, 255, 0.045) !important; }"
+	) or "")
 	segments = segs
 	tern.chrome.refresh()
 end
