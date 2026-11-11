@@ -70,6 +70,7 @@ local chat_slots: { [number]: Slot } = {}
 local host_slots: { [number]: number } = {}
 local segments: { any } = {}
 local focused_slot: number? = nil
+local tabs_css = "" -- the installed "tabs" sheet; reinstalling restyles the whole window
 
 -- Recent (closed) sessions per host, from `omp-recent` (in this folder) run on that machine.
 local MAX_RECENT = 8
@@ -490,10 +491,14 @@ function rebuild(cx)
 			table.insert(chats_lit, string.format("html:has(%s:hover) %s", tab, chat))
 		end
 	end
-	tern.css("tabs", #tabs_lit > 0 and (
+	local css = #tabs_lit > 0 and (
 		table.concat(tabs_lit, ",\n") .. " { color: var(--t1); background-color: var(--l1); }\n"
 		.. table.concat(chats_lit, ",\n") .. " { background: rgba(255, 255, 255, 0.045) !important; }"
-	) or "")
+	) or ""
+	if css ~= tabs_css then
+		tabs_css = css
+		tern.css("tabs", css)
+	end
 	segments = segs
 	tern.chrome.refresh()
 end
