@@ -473,6 +473,20 @@ function rebuild(cx)
 			table.insert(segs, { text = "⌃⌘[", tone = "kbd-l", command = "plugin.chats.narrower" })
 		end
 	end
+	-- Hovering a chat lights its tab as hovering the tab would. A row's title attribute is its command.
+	local tab_pos = {}
+	for _, t in cx.session:tabs() do
+		tab_pos[t.id] = t.position
+	end
+	local lit = {}
+	for i, slot in chat_slots do
+		local info = slot.current and cx.session:pane(slot.pane)
+		local p = info and info.tab and tab_pos[info.tab]
+		if p then
+			table.insert(lit, string.format("html:has(#statusline .sl-plugin[title='plugin.chats.go%d']:hover) #tabbar .tb-tabs > .tt:nth-child(%d)", i, p))
+		end
+	end
+	tern.css("tabs", #lit > 0 and (table.concat(lit, ",\n") .. " { color: var(--t1); background-color: var(--l1); }") or "")
 	segments = segs
 	tern.chrome.refresh()
 end
