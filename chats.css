@@ -4,12 +4,12 @@
 	--chats-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 }
 
-/* The status line no longer sits under the panes: give that room back. */
-html.tn-status .tn-stage {
+/* The widget bar no longer sits under the panes: give that room back. */
+html.tn-widgets .tn-stage {
 	bottom: max(0px, calc(var(--tn-home-clear) - var(--tn-pad-y))) !important;
 }
 
-#statusline {
+#widgetbar {
 	position: fixed !important;
 	top: 40px !important;
 	left: 0 !important;
@@ -28,57 +28,103 @@ html.tn-status .tn-stage {
 	font-family: var(--chats-font);
 }
 
-/* Tern's own status items (state dot, cwd, git, size) are hidden; only this plugin's rows stay. */
-#statusline > .sb-grp {
-	display: none !important;
-}
-
-#statusline > .sb-grp:has(.sl-plugins) {
-	order: -1;
+#widgetbar > .wg-row {
 	display: block !important;
 	width: 100%;
-	height: auto;
+	height: auto !important;
 	margin: 0 !important;
-	padding: 0;
+	padding: 0 !important;
 	position: static !important;
 }
 
-#statusline .sb-grp > :not(.sl-plugins) {
+/* Tern's own widgets (cwd, git, size, meters) are hidden; only this plugin's rows stay. */
+#widgetbar .wg-row > :not(.wg:has(> .wg-seg[data-plugin='chats'])) {
 	display: none !important;
 }
 
-#statusline .sl-plugins {
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']) {
 	display: flex !important;
 	flex-direction: column;
 	align-items: stretch;
 	gap: 0 !important;
 	width: 100%;
-	height: auto;
+	height: auto !important;
 	margin: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	background: none !important;
 	position: static !important;
 }
 
-#statusline .sl-plugins > .sl-plugin {
+#widgetbar .wg > .wg-seg[data-plugin='chats'] {
 	margin-left: 0 !important;
 	margin-right: 0 !important;
+	height: auto !important;
+	max-width: none !important;
+}
+
+/* Tern treats a widget as one button (press, hover and open-card styles on the whole widget);
+   in the sidebar only the row under the pointer reacts. */
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']),
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']):hover,
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']):active,
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']):focus,
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']):focus-visible {
+	transform: none !important;
+	filter: none !important;
+	opacity: 1 !important;
+	background: none !important;
+	box-shadow: none !important;
+	outline: 0 !important;
+	transition: none !important;
+	animation: none !important;
+}
+
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats'])::before,
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats'])::after {
+	display: none !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats']:active {
+	transform: none !important;
+}
+
+/* Hovering a widget opens its detail card ("Plugin segments"); the sidebar shows only Tern's
+   plugin widget, so no widget card is wanted. */
+.kit-popover.wgc {
+	display: none !important;
+}
+
+/* Tern's chip dot is replaced by the plugin's own state dot; its text keeps the two lines. */
+#widgetbar .wg-seg[data-plugin='chats'] > .wg-status-dot {
+	display: none !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'] > .wg-status-text {
+	white-space: pre;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font: inherit;
+	color: inherit;
 }
 
 /* Tern draws its own border, ring and background on status segments; the card replaces them. */
-#statusline .sl-plugin[data-plugin='chats'],
-#statusline .sl-plugin[data-plugin='chats']:hover,
-#statusline .sl-plugin[data-plugin='chats']:focus,
-#statusline .sl-plugin[data-plugin='chats']:focus-visible,
-#statusline .sl-plugin[data-plugin='chats']:active {
+#widgetbar .wg-seg[data-plugin='chats'],
+#widgetbar .wg-seg[data-plugin='chats']:hover,
+#widgetbar .wg-seg[data-plugin='chats']:focus,
+#widgetbar .wg-seg[data-plugin='chats']:focus-visible,
+#widgetbar .wg-seg[data-plugin='chats']:active {
 	border: 0 !important;
 	outline: 0 !important;
 	box-shadow: none !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']::after {
+#widgetbar .wg-seg[data-plugin='chats']::after {
 	display: none !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:not(:hover) {
+#widgetbar .wg-seg[data-plugin='chats']:not(:hover) {
 	background: transparent;
 }
 
@@ -89,7 +135,7 @@ html.tn-status .tn-stage {
 }
 
 /* Every row */
-#statusline .sl-plugin[data-plugin='chats'] {
+#widgetbar .wg-seg[data-plugin='chats'] {
 	display: block;
 	font-family: var(--chats-font);
 	white-space: nowrap;
@@ -100,7 +146,7 @@ html.tn-status .tn-stage {
 }
 
 /* Host headers */
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='host'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='host'] {
 	margin: 18px 0 4px;
 	padding: 0 10px;
 	font-size: 11px;
@@ -111,17 +157,17 @@ html.tn-status .tn-stage {
 	color: var(--t3);
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='host']:first-child {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='host']:first-child {
 	margin-top: 2px;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='host']:hover,
-#statusline .sl-plugin[data-plugin='chats'][data-tone='host-on'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='host']:hover,
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='host-on'] {
 	color: var(--t2);
 }
 
 /* Chat card: one element, two lines; the first line is the name */
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']) {
 	position: relative;
 	margin-top: 2px;
 	padding: 7px 10px 7px 24px;
@@ -136,7 +182,7 @@ html.tn-status .tn-stage {
 
 
 /* State dot */
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input'])::before {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input'])::before {
 	content: '';
 	position: absolute;
 	left: 10px;
@@ -148,19 +194,19 @@ html.tn-status .tn-stage {
 	opacity: 0.5;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone$='working']::before {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='working']::before {
 	background: var(--accent, #8b7cf6);
 	opacity: 1;
 	animation: chats-pulse 1.6s ease-in-out infinite;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone$='waiting_input']::before {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='waiting_input']::before {
 	background: #e5a50a;
 	opacity: 1;
 }
 
 /* Finished while you were in another chat; grey again once you open it */
-#statusline .sl-plugin[data-plugin='chats'][data-tone$='done-idle']::before {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='done-idle']::before {
 	background: #3fb950;
 	opacity: 1;
 }
@@ -172,17 +218,17 @@ html.tn-status .tn-stage {
 }
 
 /* Hover and the open chat */
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover {
 	background: rgba(255, 255, 255, 0.045) !important;
 }
 
-#statusline .sl-plugin.sl-plugin[data-plugin='chats'][data-tone^='on-'][data-tone^='on-'] {
+#widgetbar .wg-seg.wg-seg[data-plugin='chats'][data-tone^='on-'][data-tone^='on-'] {
 	background: light-dark(var(--card), rgba(255, 255, 255, 0.085)) !important;
 	color: var(--t2);
 }
 
 /* New chat */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='new'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='new'] {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -193,33 +239,33 @@ html.tn-status .tn-stage {
 	color: var(--t3);
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='new']:hover {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='new']:hover {
 	background: rgba(255, 255, 255, 0.045) !important;
 	color: var(--t1);
 }
 
 /* Shortcut legend at the bottom: the list fills the column so the legend can sit last. */
-#statusline > .sb-grp:has(.sl-plugins),
-#statusline .sl-plugins {
+#widgetbar > .wg-row,
+#widgetbar .wg:has(> .wg-seg[data-plugin='chats']) {
 	flex: 1 1 auto;
 	min-height: 100%;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='keys'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='keys'] {
 	padding: 4px 10px;
 	font-size: 12px;
 	line-height: 18px;
 	color: var(--t3);
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='keys-first'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='keys-first'] {
 	margin-top: auto;
 	padding-top: 14px;
 	border-top: 1px solid var(--l1) !important;
 }
 
 /* The key chip rides on its label's line, at the right edge. */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='kbd'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='kbd'] {
 	align-self: flex-end;
 	margin: -23px 8px 3px 0 !important;
 	padding: 0 6px;
@@ -233,14 +279,14 @@ html.tn-status .tn-stage {
 	color: var(--t2);
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone^='keys']):hover,
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone^='keys']):has(+ [data-tone='kbd']:hover) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone^='keys']):hover,
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone^='keys']):has(+ [data-tone='kbd']:hover) {
 	color: var(--t1);
 	background: transparent !important;
 }
 
 /* Second chip on the Width line, left of the first. */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='kbd-l'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='kbd-l'] {
 	align-self: flex-end;
 	margin: -21px 56px 3px 0 !important;
 	padding: 0 6px;
@@ -254,13 +300,13 @@ html.tn-status .tn-stage {
 	color: var(--t2);
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone='kbd'], [data-tone='kbd-l']):hover {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone='kbd'], [data-tone='kbd-l']):hover {
 	background: rgba(255, 255, 255, 0.12) !important;
 	color: var(--t1);
 }
 
 /* Host header "+" (new chat on that host), on the header's line at the right. */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='host-add'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='host-add'] {
 	align-self: flex-end;
 	margin: -21px 6px 4px 0 !important;
 	padding: 0 7px;
@@ -270,13 +316,13 @@ html.tn-status .tn-stage {
 	color: var(--t3);
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='host-add']:hover {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='host-add']:hover {
 	background: rgba(255, 255, 255, 0.08) !important;
 	color: var(--t1);
 }
 
 /* "▾ Closed 2": folds the host's closed chats. */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='recent-head'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='recent-head'] {
 	margin: 6px 0 2px;
 	padding: 3px 10px;
 	border-radius: 6px;
@@ -285,13 +331,13 @@ html.tn-status .tn-stage {
 	color: var(--t3);
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='recent-head']:hover {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='recent-head']:hover {
 	color: var(--t2);
 	background: rgba(255, 255, 255, 0.04) !important;
 }
 
 /* Closed chat: same card as an open one, hollow ring instead of a dot, dimmer. */
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']) {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']) {
 	position: relative;
 	margin-top: 2px;
 	padding: 7px 30px 7px 24px;
@@ -305,7 +351,7 @@ html.tn-status .tn-stage {
 }
 
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head'])::before {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head'])::before {
 	content: '';
 	position: absolute;
 	left: 9px;
@@ -318,12 +364,12 @@ html.tn-status .tn-stage {
 	opacity: 0.8;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']):hover {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']):hover {
 	opacity: 1;
 	background: rgba(255, 255, 255, 0.045) !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone='del'], [data-tone='del-armed']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone='del'], [data-tone='del-armed']) {
 	align-self: flex-end;
 	margin: -24px 8px 2px 0 !important;
 	padding: 1px 8px !important;
@@ -336,17 +382,17 @@ html.tn-status .tn-stage {
 	opacity: 0;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']):hover + [data-tone='del'],
-#statusline .sl-plugin[data-plugin='chats'][data-tone='del']:hover {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='recent']:not([data-tone='recent-head']):hover + [data-tone='del'],
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='del']:hover {
 	opacity: 1;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='del']:hover {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='del']:hover {
 	background: rgba(255, 255, 255, 0.1) !important;
 	color: var(--t1);
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='del-armed'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='del-armed'] {
 	opacity: 1;
 	background: rgba(229, 72, 77, 0.18) !important;
 	color: #ff8a8e;
@@ -354,28 +400,28 @@ html.tn-status .tn-stage {
 
 /* Forks: a tree like Claude's. Each level steps in 16px; a vertical guide runs under the
    parent's dot, and the last child's guide bends into its own dot (└). */
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone^='recent-f1']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone*='f1'], [data-tone^='recent-f1']) {
 	margin-left: 6px !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f2'], [data-tone^='recent-f2']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone*='f2'], [data-tone^='recent-f2']) {
 	margin-left: 22px !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f3'], [data-tone^='recent-f3']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone*='f3'], [data-tone^='recent-f3']) {
 	margin-left: 38px !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f']) {
 	margin-top: 0 !important;
 	padding-left: 34px !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f'])::before {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f'])::before {
 	left: 22px !important;
 }
 
-#statusline .sl-plugin.sl-plugin[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f'])::after {
+#widgetbar .wg-seg.wg-seg[data-plugin='chats']:is([data-tone*='f1'], [data-tone*='f2'], [data-tone*='f3'], [data-tone^='recent-f'])::after {
 	display: block !important;
 	content: '';
 	position: absolute;
@@ -386,7 +432,7 @@ html.tn-status .tn-stage {
 	border-left: 1px solid var(--l1);
 }
 
-#statusline .sl-plugin.sl-plugin[data-plugin='chats']:is([data-tone*='f1L'], [data-tone*='f2L'], [data-tone*='f3L'], [data-tone$='L'])::after {
+#widgetbar .wg-seg.wg-seg[data-plugin='chats']:is([data-tone*='f1L'], [data-tone*='f2L'], [data-tone*='f3L'], [data-tone$='L'])::after {
 	bottom: auto;
 	height: 15px;
 	border-bottom: 1px solid var(--l1);
@@ -394,7 +440,7 @@ html.tn-status .tn-stage {
 }
 
 /* ⑂ fork button: shows on hover, top right of its card (left of × on closed chats). */
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone='more'], [data-tone='more']) {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone='more'], [data-tone='more']) {
 	align-self: flex-end;
 	margin: -24px 8px 2px 0 !important;
 	padding: 1px 9px;
@@ -408,30 +454,30 @@ html.tn-status .tn-stage {
 	opacity: 0;
 }
 
-#statusline .sl-plugin[data-plugin='chats'][data-tone='more'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='more'] {
 	margin-right: 36px !important;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover + [data-tone='more'],
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:hover + [data-tone='more'],
-#statusline .sl-plugin[data-plugin='chats'][data-tone^='recent']:hover + [data-tone='more'] + [data-tone='del'],
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone='more'], [data-tone='more']):hover,
-#statusline .sl-plugin[data-plugin='chats'][data-tone='more']:hover + [data-tone='del'] {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover + [data-tone='more'],
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='recent']:hover + [data-tone='more'],
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='recent']:hover + [data-tone='more'] + [data-tone='del'],
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone='more'], [data-tone='more']):hover,
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='more']:hover + [data-tone='del'] {
 	opacity: 1;
 }
 
-#statusline .sl-plugin[data-plugin='chats']:is([data-tone='more'], [data-tone='more']):hover {
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone='more'], [data-tone='more']):hover {
 	background: var(--accent, #8b7cf6) !important;
 	color: #fff;
 }
 
 /* Tern's CSS can't chain two siblings off :hover, so × stays faintly visible on closed chats. */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='del'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='del'] {
 	opacity: 0.35;
 }
 
 /* ⋯ chip: a compact round button */
-#statusline .sl-plugin[data-plugin='chats'][data-tone='more'] {
+#widgetbar .wg-seg[data-plugin='chats'][data-tone='more'] {
 	margin-right: 8px !important;
 	padding: 0 8px !important;
 	font-size: 15px !important;

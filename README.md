@@ -15,6 +15,8 @@ its full screen.
 
 ## Install
 
+Needs Tern 0.9.18 or newer (the widget bar; on older Tern use plugin 0.9.x).
+
 1. Install it in Tern: `tern plugin install github.com/yigithanyigit/tern-chats`
    (or clone it and `tern plugin link <path-to>/tern-chats`).
 2. Every machine needs `python3`. The helper (`omp-recent`, in this folder) runs from here on this

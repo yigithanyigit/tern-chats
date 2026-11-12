@@ -534,7 +534,7 @@ function rebuild(cx)
 		local info = slot.current and cx.session:pane(slot.pane)
 		local p = info and info.tab and tab_pos[info.tab]
 		if p then
-			local chat = string.format("#statusline .sl-plugin[title='plugin.chats.go%d']", i)
+			local chat = string.format("#widgetbar .wg-seg[title='plugin.chats.go%d']", i)
 			local tab = string.format("#tabbar .tb-tabs > .tt:nth-child(%d)", p)
 			table.insert(tabs_lit, string.format("html:has(%s:hover) %s", chat, tab))
 			table.insert(chats_lit, string.format("html:has(%s:hover) %s", tab, chat))
@@ -1049,10 +1049,9 @@ local function poll()
 	end)
 end
 
+-- The sidebar is the widget bar (Tern shows it by default; palette › Edit widgets keeps "status",
+-- the plugin widget, in it).
 local function start(cx)
-	if cx.settings:get("status_bar") ~= true then
-		cx.settings:set("status_bar", true)
-	end
 	rebuild(cx)
 end
 
@@ -1068,7 +1067,7 @@ local MIN_W, MAX_W, STEP_W = 180, 420, 24
 local function apply_layout()
 	local w = math.clamp(tern.kv.get("width") or 248, MIN_W, MAX_W)
 	if tern.kv.get("collapsed") then
-		tern.css("layout", "#statusline{display:none !important}#panel{left:3px !important}")
+		tern.css("layout", "#widgetbar{display:none !important}#panel{left:3px !important}")
 	else
 		tern.css("layout", string.format("html:root{--chats-w:%dpx}", w))
 	end
