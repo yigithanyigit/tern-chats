@@ -43,6 +43,7 @@ New chats start in a folder you pick. The browser opens at the projects root, wh
 | Search chats | ⌃⌘C |
 | Rename the chat in front | ⌃⌘R |
 | Fork the chat in front | ⌃⌘F |
+| Calm mode: no animations in the window (fewer redraws, less energy) | ⌃⌘M |
 | Delete the chat in front (asks first) | ⌃⌘⌫ |
 | Close a chat | ⌘W twice (an empty chat closes at once) |
 

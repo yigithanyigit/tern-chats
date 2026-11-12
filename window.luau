@@ -508,6 +508,7 @@ function rebuild(cx)
 	-- Shortcut legend, pinned to the bottom by chats.css: a label row, then its key chip on the same line.
 	for i, row in {
 		{ "Hide sidebar", "⌃⌘B", "plugin.chats.toggle" },
+		{ "Calm mode", "⌃⌘M", "plugin.chats.calm" },
 		{ "Search chats", "⌃⌘C", "plugin.chats.open" },
 		{ "Rename chat", "⌃⌘R", "plugin.chats.rename" },
 		{ "Fork chat", "⌃⌘F", "plugin.chats.fork_current" },
@@ -1092,6 +1093,19 @@ command({ id = "toggle", title = "Chats: hide/show sidebar", icon = "sidebar", k
 command({ id = "narrower", title = "Chats: narrower sidebar", icon = "sidebar", keys = { "ctrl+cmd+[" }, run = function(_cx) resize(-STEP_W) end })
 command({ id = "wider", title = "Chats: wider sidebar", icon = "sidebar", keys = { "ctrl+cmd+]" }, run = function(_cx) resize(STEP_W) end })
 apply_layout()
+
+-- Calm mode: no animations or transitions anywhere in the window (spinners, shimmer, the blinking
+-- caret, fades). Tern redraws the whole window every frame while anything animates; with calm on
+-- it measured about half the frames and a quarter less GPU. The sidebar dots still show who works.
+local function apply_calm()
+	tern.css("calm", tern.kv.get("calm") and "*, *::before, *::after { animation: none !important; transition: none !important; }" or "")
+end
+command({ id = "calm", title = "Chats: calm mode (no animations, saves energy)", icon = "sparkle", keys = { "ctrl+cmd+m" }, run = function(cx)
+	tern.kv.set("calm", not tern.kv.get("calm") or nil)
+	apply_calm()
+	cx:toast("info", tern.kv.get("calm") and "Calm mode on" or "Calm mode off", tern.kv.get("calm") and "No animations: fewer redraws, less energy" or "Animations are back")
+end })
+apply_calm()
 
 -- Closing a block, tab or session that holds an omp chat asks first.
 local function agents_in(cx, scope: string): { number }
