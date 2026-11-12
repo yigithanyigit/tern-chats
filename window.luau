@@ -12,6 +12,13 @@
 -- once Tern has shown it; else the folder.
 local tern = require("tern")
 
+-- Desktop only: on a phone the left column would take most of the screen. Without this the
+-- plugin adds nothing there (its stylesheet is installed below, not by the manifest).
+if tern.runtime.os == "ios" then
+	return
+end
+tern.css("chats", tern.fs.read(tern.plugin.dir .. "/chats.css"))
+
 -- Hidden commands can't be run with cx:action, so keep every command's function to call directly.
 local runs: { [string]: (any) -> () } = {}
 local function command(def)
