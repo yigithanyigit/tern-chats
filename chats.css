@@ -159,6 +159,12 @@ html.tn-status .tn-stage {
 	opacity: 1;
 }
 
+/* Finished while you were in another chat; grey again once you open it */
+#statusline .sl-plugin[data-plugin='chats'][data-tone$='done-idle']::before {
+	background: #3fb950;
+	opacity: 1;
+}
+
 @keyframes chats-pulse {
 	50% {
 		opacity: 0.35;

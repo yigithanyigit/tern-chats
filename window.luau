@@ -70,6 +70,8 @@ local chat_slots: { [number]: Slot } = {}
 local host_slots: { [number]: number } = {}
 local segments: { any } = {}
 local focused_slot: number? = nil
+local last_state: { [string]: string } = {} -- "<host>/<pane>" -> state at the last refresh
+local unread: { [string]: boolean } = tern.kv.get("unread") or {} -- finished, not opened since
 local tabs_css = "" -- the installed "tabs" sheet; reinstalling restyles the whole window
 
 -- Recent (closed) sessions per host, from `omp-recent` (in this folder) run on that machine.
@@ -345,6 +347,20 @@ function rebuild(cx)
 			end
 			chat_slots[n] = { pane = a.pane, host = h.id, hostname = h.name, current = h.current, label = label }
 			local state = (a.state == "working" or a.state == "waiting_input") and a.state or "idle"
+			-- Finished while you were elsewhere: "done-idle" (green) until you open the chat.
+			local was = unread[k]
+			if on or state ~= "idle" then
+				unread[k] = nil
+			elseif last_state[k] == "working" then
+				unread[k] = true
+			end
+			if unread[k] ~= was then
+				tern.kv.set("unread", unread)
+			end
+			last_state[k] = state
+			if state == "idle" and unread[k] then
+				state = "done-idle"
+			end
 			-- Same title on several sessions (a fork and its parent): the newer pane gets the newer session.
 			-- Which session file is this pane? Same-titled sessions (forks) are told apart by the
 			-- start of the last reply, which both Tern and the file know; else newest first.

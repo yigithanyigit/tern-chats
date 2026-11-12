@@ -7,6 +7,9 @@
 A left sidebar listing every omp chat on every machine your Tern window is attached to (this
 computer and remote hosts), with closed chats, forks as a tree, and a folder browser for new chats.
 
+Each open chat has a dot: purple pulsing while it works, amber when it needs you, green when it
+finished while you were in another chat, and grey once you have opened it.
+
 ## Install
 
 1. Install it in Tern: `tern plugin install github.com/yigithanyigit/tern-chats`
