@@ -375,6 +375,19 @@ function rebuild(cx)
 					sure = true
 				end
 			end
+			-- Exact without the session daemon (Tern then runs programs in the window and `tern ls`
+			-- sees none): Tern reopens chats as `omp --resume <id>` / `--restore <file>`, so the
+			-- pane's own command line names its session.
+			local line = not session and info and info.running and info.running.line
+			local named = line and line:match("^%s*omp%s.*(%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x)")
+			if named then
+				for _, it in sessions do
+					if it.id == named then
+						session = it
+						sure = true
+					end
+				end
+			end
 			if same and session then
 				for j, it in same do
 					if it == session then
