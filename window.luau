@@ -73,6 +73,7 @@ local focused_slot: number? = nil
 local last_state: { [string]: string } = {} -- "<host>/<pane>" -> state at the last refresh
 local unread: { [string]: boolean } = tern.kv.get("unread") or {} -- finished, not opened since
 local tabs_css = "" -- the installed "tabs" sheet; reinstalling restyles the whole window
+local segments_sig = "" -- what the sidebar last drew; unchanged rebuilds skip the redraw
 
 -- Recent (closed) sessions per host, from `omp-recent` (in this folder) run on that machine.
 local MAX_RECENT = 8
@@ -515,8 +516,17 @@ function rebuild(cx)
 		tabs_css = css
 		tern.css("tabs", css)
 	end
+	-- Redraw only on change: a redraw restyles every pane's status line (heavy :has() rules).
+	local parts = table.create(#segs)
+	for i, s in segs do
+		parts[i] = (s.text or "") .. "\1" .. (s.tone or "") .. "\1" .. (s.command or "")
+	end
+	local sig = table.concat(parts, "\2")
 	segments = segs
-	tern.chrome.refresh()
+	if sig ~= segments_sig then
+		segments_sig = sig
+		tern.chrome.refresh()
+	end
 end
 
 -- Every pane shows the same sidebar.
