@@ -1,5 +1,9 @@
 # Chats: a Tern sidebar for omp chats on every machine
 
+[![Demo: the Chats sidebar in Tern (90 s, with narration)](demo/poster.png)](demo/chats-for-tern.mp4)
+
+▶ [Watch the 90-second demo](demo/chats-for-tern.mp4)
+
 A left sidebar listing every omp chat on every machine your Tern window is attached to (this
 computer and remote hosts), with closed chats, forks as a tree, and a folder browser for new chats.
 
