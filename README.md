@@ -7,7 +7,7 @@
 A left sidebar listing every omp chat on every machine your Tern window is attached to (this
 computer and remote hosts), with closed chats, forks as a tree, and a folder browser for new chats.
 
-Each open chat has a dot: purple pulsing while it works, amber when it needs you, green when it
+Each open chat has a dot: purple while it works, amber when it needs you, green when it
 finished while you were in another chat, and grey once you have opened it.
 
 The sidebar is for desktop windows. In the Tern iOS app the plugin does nothing, so the phone keeps

@@ -194,10 +194,20 @@ html.tn-widgets .tn-stage {
 	opacity: 0.5;
 }
 
+/* Working: steady purple with a soft ring. No pulse: an endless animation makes Tern redraw the
+   window every frame for as long as any chat works, which costs energy. */
 #widgetbar .wg-seg[data-plugin='chats'][data-tone$='working']::before {
 	background: var(--accent, #8b7cf6);
 	opacity: 1;
-	animation: chats-pulse 1.6s ease-in-out infinite;
+	box-shadow: 0 0 0 2px rgba(139, 124, 246, 0.28);
+}
+
+/* Nothing in the sidebar animates (Tern's own chip parts included, even hidden ones). */
+#widgetbar .wg-seg[data-plugin='chats'],
+#widgetbar .wg-seg[data-plugin='chats'] *,
+#widgetbar .wg-seg[data-plugin='chats']::before,
+#widgetbar .wg-seg[data-plugin='chats']::after {
+	animation: none !important;
 }
 
 #widgetbar .wg-seg[data-plugin='chats'][data-tone$='waiting_input']::before {
@@ -211,11 +221,6 @@ html.tn-widgets .tn-stage {
 	opacity: 1;
 }
 
-@keyframes chats-pulse {
-	50% {
-		opacity: 0.35;
-	}
-}
 
 /* Hover and the open chat */
 #widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='idle'], [data-tone$='working'], [data-tone$='waiting_input']):hover {
