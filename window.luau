@@ -21,6 +21,7 @@ end
 
 local MAX_HOSTS = 6
 local MAX_CHATS = 40
+local UUID = "%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x" -- session id
 local POLL_MS = 2000
 
 local function base(path: string): string
@@ -135,9 +136,12 @@ local function tilde(path: string, hostname: string?): string
 	return path
 end
 
-local function fetch_recent(cx)
+local inflight: { [string]: number } = {} -- host -> when its running session-list fetch began
+
+-- Session lists (and, unless `sessions_only`, project folders) from every connected host.
+local function fetch_recent(cx, sessions_only: boolean?)
 	for _, h in cx.hosts:list() do
-		if h.state == "connected" then
+		if h.state == "connected" and not sessions_only then
 			helper(h, { "--folders" }, function(res, _cx)
 				if res.status == 0 then
 					local list = {}
@@ -156,7 +160,11 @@ local function fetch_recent(cx)
 					tern.kv.set("folders", folders)
 				end
 			end)
+		end
+		if h.state == "connected" and os.time() - (inflight[h.name] or 0) > 20 then
+			inflight[h.name] = os.time()
 			helper(h, { tostring(MAX_RECENT + 6) }, function(res, cx2)
+				inflight[h.name] = nil
 				if res.status ~= 0 then
 					return
 				end
@@ -190,12 +198,13 @@ local function fetch_recent(cx)
 end
 
 -- A new, forked or reopened chat writes its session file a moment after it starts, and only
--- then can it be placed in the tree: refresh a few times soon after, not just every 30 s.
+-- then can it be placed in the tree: fetch the session lists (not folders) soon after a pane
+-- event; overlapping requests coalesce per host.
 local function refresh_soon()
-	for _, ms in { 2000, 6000, 15000 } do
+	for _, ms in { 500, 1500, 3500, 8000 } do
 		tern.timer(ms, function(cx)
 			if cx then
-				fetch_recent(cx)
+				fetch_recent(cx, true)
 			end
 		end)
 	end
@@ -329,6 +338,36 @@ function rebuild(cx)
 		end)
 		local first_open = #segs + 1
 		local entries = {} -- { seg, id, parent } per open chat, to move forks under their parent
+		-- Exact pane -> session claims first, so a title guess never takes a session another pane
+		-- really holds. Sources: omp-recent asked Tern which pane's process holds which file; or the
+		-- pane's command line names it (`omp --resume <id>`, `--restore <file>`), which also works
+		-- when Tern runs chats without its session daemon. `--fork <id>` is a new chat under <id>.
+		local claim, fork_of, claimed = {}, {}, {}
+		for _, a in list do
+			local info = cx.session:pane(a.pane)
+			local line = info and info.running and info.running.line or ""
+			local flag, id = line:match("%-%-(%a+)[%s=]+%S-(" .. UUID .. ")")
+			for _, it in sessions do
+				if it.pane == a.pane or ((flag == "resume" or flag == "restore") and it.id == id) then
+					claim[a.pane] = it
+				end
+			end
+			if flag == "fork" and not claim[a.pane] then
+				fork_of[a.pane] = id
+			end
+			if claim[a.pane] then
+				claimed[claim[a.pane].id] = true
+			end
+		end
+		local free_by_title = {}
+		for t, items in id_by_title do
+			free_by_title[t] = {}
+			for _, it in items do
+				if not claimed[it.id] then
+					table.insert(free_by_title[t], it)
+				end
+			end
+		end
 		for _, a in list do
 			if n >= MAX_CHATS then
 				break
@@ -362,40 +401,13 @@ function rebuild(cx)
 			if state == "idle" and unread[k] then
 				state = "done-idle"
 			end
-			-- Same title on several sessions (a fork and its parent): the newer pane gets the newer session.
-			-- Which session file is this pane? Same-titled sessions (forks) are told apart by the
-			-- start of the last reply, which both Tern and the file know; else newest first.
-			local same = id_by_title[titles[k] or ""]
-			local sure = same ~= nil and #same == 1 -- only one session has this title
-			-- Exact: omp-recent asked Tern which pane's process holds which session.
-			local session
-			for _, it in sessions do
-				if it.pane == a.pane then
-					session = it
-					sure = true
-				end
-			end
-			-- Exact without the session daemon (Tern then runs programs in the window and `tern ls`
-			-- sees none): Tern reopens chats as `omp --resume <id>` / `--restore <file>`, so the
-			-- pane's own command line names its session.
-			local line = not session and info and info.running and info.running.line
-			local named = line and line:match("^%s*omp%s.*(%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x)")
-			if named then
-				for _, it in sessions do
-					if it.id == named then
-						session = it
-						sure = true
-					end
-				end
-			end
-			if same and session then
-				for j, it in same do
-					if it == session then
-						table.remove(same, j)
-						break
-					end
-				end
-			elseif same then
+			-- Which session file is this pane? An exact claim (above) wins; a new fork has no file yet
+			-- and shows under its parent. Otherwise guess among same-titled sessions nobody claims,
+			-- told apart by the start of the last reply, which both Tern and the file know.
+			local session = claim[a.pane]
+			local same = free_by_title[titles[k] or ""]
+			local sure = session ~= nil or (same ~= nil and #same == 1)
+			if not session and not fork_of[a.pane] and same then
 				local mine = oneline(a.last_message, 60):gsub("…$", "")
 				for j, it in same do
 					if mine ~= "" and it.last and it.last:sub(1, #mine) == mine then
@@ -407,14 +419,14 @@ function rebuild(cx)
 				-- No reply match: take a session that no other open pane's reply claims.
 				if not session then
 					for j, it in same do
-						local claimed = false
+						local taken = false
 						for _, other in list do
 							local o = oneline(other.last_message, 60):gsub("…$", "")
 							if o ~= "" and it.last and it.last:sub(1, #o) == o then
-								claimed = true
+								taken = true
 							end
 						end
-						if not claimed then
+						if not taken then
 							session = table.remove(same, j)
 							break
 						end
@@ -430,7 +442,7 @@ function rebuild(cx)
 			local seg = { command = "plugin.chats.go" .. n }
 			table.insert(segs, seg)
 			table.insert(entries, {
-				seg = seg, id = session and session.id, parent = session and session.parent,
+				seg = seg, id = session and session.id, parent = session and session.parent or fork_of[a.pane],
 				label = label, sub = sub, tone = (on and "on-" or ""), state = state,
 			})
 			chat_slots[n].menu = menu_chip({ host = h.id, item = session, chat = n, sure = sure })
@@ -1127,11 +1139,24 @@ for id, scope in { close_pane = "pane", close_tab = "tab", close_session = "sess
 	end)
 end
 
+-- Tern's events redraw at once. Pane changes and title changes (a chat names itself once its
+-- session file exists; a rename) also refetch the session lists, a title burst only once.
+local title_fetch = false
 for _, name in { "focus", "title", "tab_created", "tab_closed", "pane_created", "pane_closed" } do
 	tern.on(name, function(_ev, cx)
 		rebuild(cx)
 		if name == "pane_created" or name == "pane_closed" then
 			refresh_soon()
+		elseif name == "title" and not title_fetch then
+			title_fetch = true
+			tern.timer(5000, function(_cx)
+				title_fetch = false -- at most one title-driven fetch per 5 s (each may be an ssh trip)
+			end)
+			tern.timer(700, function(cx2)
+				if cx2 then
+					fetch_recent(cx2, true)
+				end
+			end)
 		end
 	end)
 end
