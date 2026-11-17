@@ -144,6 +144,12 @@ local function tilde(path: string, hostname: string?): string
 end
 
 local inflight: { [string]: number } = {} -- host -> when its running session-list fetch began
+local again: { [string]: boolean } = {} -- host -> fetch once more when the running one lands
+local gone: { [string]: boolean } = {} -- session ids deleted here; hidden even if an older list has them
+-- A fork just started from the sidebar: the next new chat pane on that host is shown under
+-- `parent` at once, before omp has written the fork's session file.
+local pending_fork: { host: number, parent: string, at: number, before: { [number]: boolean } }? = nil
+local fork_pane: { [number]: string } = {} -- pane -> parent session, for forks started here
 
 -- Machine meters per host, from the same helper run as the session list (no extra trip):
 -- { cpu, mem, disk = 0..1, swap = bytes }. Linux CPU comes as cumulative ticks; two readings
@@ -195,10 +201,18 @@ local function fetch_recent(cx, sessions_only: boolean?)
 				end
 			end)
 		end
-		if h.state == "connected" and os.time() - (inflight[h.name] or 0) > 20 then
+		if h.state == "connected" and os.time() - (inflight[h.name] or 0) <= 20 then
+			again[h.name] = true -- one is running: fetch once more when it lands (its data may be old)
+		elseif h.state == "connected" then
 			inflight[h.name] = os.time()
 			helper(h, { tostring(MAX_RECENT + 6) }, function(res, cx2)
 				inflight[h.name] = nil
+				if again[h.name] then
+					again[h.name] = nil
+					if cx2 then
+						fetch_recent(cx2, true)
+					end
+				end
 				if res.status ~= 0 then
 					return
 				end
@@ -207,7 +221,7 @@ local function fetch_recent(cx, sessions_only: boolean?)
 					local ok, item = pcall(tern.json.decode, line)
 					if ok and type(item) == "table" and item.stats then
 						read_stats(h.name, item.stats)
-					elseif ok and type(item) == "table" then
+					elseif ok and type(item) == "table" and not gone[item.id] then
 						table.insert(list, item)
 					end
 				end
@@ -231,6 +245,21 @@ local function fetch_recent(cx, sessions_only: boolean?)
 			end)
 		end
 	end
+end
+
+-- Drop a deleted session from the list right away; the helper's fetch confirms it later.
+local function forget(cx, host: number, id: string)
+	gone[id] = true
+	for _, h in cx.hosts:list() do
+		if h.id == host and recent[h.name] then
+			for j = #recent[h.name], 1, -1 do
+				if recent[h.name][j].id == id then
+					table.remove(recent[h.name], j)
+				end
+			end
+		end
+	end
+	rebuild(cx)
 end
 
 -- A new, forked or reopened chat writes its session file a moment after it starts, and only
@@ -418,6 +447,18 @@ function rebuild(cx)
 			end
 			if flag == "fork" and not claim[a.pane] then
 				fork_of[a.pane] = id
+			end
+			-- Forked from the sidebar a moment ago: the first chat pane that wasn't there before is it.
+			local pf = pending_fork
+			if pf and os.time() - pf.at > 60 then
+				pending_fork, pf = nil, nil
+			end
+			if pf and pf.host == h.id and not claim[a.pane] and not fork_of[a.pane] and not pf.before[a.pane] then
+				fork_pane[a.pane] = pf.parent
+				pending_fork = nil
+			end
+			if fork_pane[a.pane] and not claim[a.pane] and not fork_of[a.pane] then
+				fork_of[a.pane] = fork_pane[a.pane]
 			end
 			if claim[a.pane] then
 				claimed[claim[a.pane].id] = true
@@ -992,6 +1033,7 @@ for i = 1, MAX_HOSTS * MAX_RECENT do
 							cx2.layout:close(slot.pane)
 						end)
 					end
+					forget(cx2, m.host, m.item.id)
 					for _, h in cx2.hosts:list() do
 						if h.id == m.host then
 							helper(h, { "--delete", m.item.id }, function(res, cx3)
@@ -1019,6 +1061,11 @@ for i = 1, MAX_HOSTS * MAX_RECENT do
 			return
 		end
 		local cmd = "omp --fork " .. f.item.id
+		local before = {}
+		for _, a in cx.agents:list() do
+			before[a.pane] = true
+		end
+		pending_fork = { host = f.host, parent = f.item.id, at = os.time(), before = before }
 		local pane = idle_shell(cx, f.host)
 		if pane then
 			cx:run(pane, "cd " .. string.format("%q", f.item.cwd) .. " && " .. cmd .. "\r")
@@ -1026,7 +1073,8 @@ for i = 1, MAX_HOSTS * MAX_RECENT do
 			cx.hosts:switch(f.host)
 			cx.hosts:terminal(f.host, { cwd = f.item.cwd, command = cmd })
 		end
-		fetch_recent(cx)
+		rebuild(cx)
+		refresh_soon()
 	end })
 	-- × arms; a second click within 3 s moves the session file to ~/.omp/agent/sessions-trash.
 	command({ id = "delete" .. i, title = "Delete " .. i, available = hidden, run = function(cx)
@@ -1058,6 +1106,7 @@ for i = 1, MAX_HOSTS * MAX_RECENT do
 		if not h then
 			return
 		end
+		forget(cx, r.host, r.item.id)
 		helper(h, { "--delete", r.item.id }, function(res, cx2)
 			if cx2 then
 				if res.status ~= 0 then
@@ -1102,6 +1151,7 @@ command({ id = "delete_current", title = "Delete chat…", icon = "trash", keys 
 		pcall(function()
 			cx2.layout:close(slot.pane)
 		end)
+		forget(cx2, m.host, m.item.id)
 		for _, h in cx2.hosts:list() do
 			if h.id == m.host then
 				helper(h, { "--delete", m.item.id }, function(res, cx3)
