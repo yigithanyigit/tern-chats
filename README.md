@@ -10,6 +10,10 @@ computer and remote hosts), with closed chats, forks as a tree, and a folder bro
 Each open chat has a dot: purple while it works, amber when it needs you, green when it
 finished while you were in another chat, and grey once you have opened it.
 
+Each machine's header shows three meters: cpu · mem · disk, as a dot and a percentage (green, amber
+from 80%, red from 92%; mem is red once swap is larger than RAM). They come from the same helper
+run as the chat list (a few kernel reads), so they add no load and no extra connection.
+
 The sidebar is for desktop windows. In the Tern iOS app the plugin does nothing, so the phone keeps
 its full screen.
 

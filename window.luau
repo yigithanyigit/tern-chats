@@ -145,6 +145,33 @@ end
 
 local inflight: { [string]: number } = {} -- host -> when its running session-list fetch began
 
+-- Machine meters per host, from the same helper run as the session list (no extra trip):
+-- { cpu, mem, disk = 0..1, swap = bytes }. Linux CPU comes as cumulative ticks; two readings
+-- make a percentage.
+local meters: { [string]: any } = {}
+local last_ticks: { [string]: { number } } = {}
+local function read_stats(host: string, s)
+	local m = { swap = s.swap_used or 0, mem_total = s.mem_total }
+	if s.cpu_ticks then
+		local prev = last_ticks[host]
+		last_ticks[host] = s.cpu_ticks
+		if prev and s.cpu_ticks[2] > prev[2] then
+			m.cpu = (s.cpu_ticks[1] - prev[1]) / (s.cpu_ticks[2] - prev[2])
+		else
+			m.cpu = meters[host] and meters[host].cpu
+		end
+	elseif s.cpu_pct then
+		m.cpu = s.cpu_pct / 100
+	end
+	if s.mem_total and s.mem_total > 0 then
+		m.mem = s.mem_used / s.mem_total
+	end
+	if s.disk_total and s.disk_total > 0 then
+		m.disk = s.disk_used / s.disk_total
+	end
+	meters[host] = m
+end
+
 -- Session lists (and, unless `sessions_only`, project folders) from every connected host.
 local function fetch_recent(cx, sessions_only: boolean?)
 	for _, h in cx.hosts:list() do
@@ -178,7 +205,9 @@ local function fetch_recent(cx, sessions_only: boolean?)
 				local list = {}
 				for line in res.stdout:gmatch("[^\n]+") do
 					local ok, item = pcall(tern.json.decode, line)
-					if ok and type(item) == "table" then
+					if ok and type(item) == "table" and item.stats then
+						read_stats(h.name, item.stats)
+					elseif ok and type(item) == "table" then
 						table.insert(list, item)
 					end
 				end
@@ -269,6 +298,21 @@ function rebuild(cx)
 			tone = h.current and "host-on" or "host",
 			command = "plugin.chats.host" .. hi,
 		})
+		-- Meters on the host's own line, right side: cpu · mem · disk as a colored dot and a number.
+		-- Green below 80%, amber from 80%, red from 92% (mem is red too once swap passes RAM).
+		-- Hidden when the sidebar is too narrow for them beside the name.
+		local m = online and meters[h.name]
+		if m and (tern.kv.get("width") or 248) >= 220 then
+			for _, k in { "cpu", "mem", "disk" } do
+				local x = m[k]
+				local level = not x and "na" or (x >= 0.92 or (k == "mem" and m.mem_total and m.swap >= m.mem_total)) and "bad" or x >= 0.8 and "warn" or "ok"
+				table.insert(segs, {
+					text = x and tostring(math.min(99, math.floor(x * 100 + 0.5))) or "–",
+					tone = "meter-" .. k .. "-" .. level,
+					command = "plugin.chats.host" .. hi,
+				})
+			end
+		end
 		if online then
 			table.insert(segs, { text = "+", tone = "host-add", command = "plugin.chats.new" .. hi })
 		end

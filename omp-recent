@@ -184,6 +184,62 @@ def started_session(pid, cwd, run):
                 best = (made, f.stem.split("_", 1)[-1])
     return best and best[1]
 
+def machine_stats():
+    """CPU, memory, swap and disk of this machine, from what the kernel already keeps: a few
+    /proc reads on Linux, one sysctl/vm_stat/ps on macOS. No sampling, no waiting.
+    Linux CPU comes as cumulative ticks; the sidebar turns two readings into a percentage."""
+    import os
+    import subprocess
+    out = {"cores": os.cpu_count() or 1}
+    root = "/System/Volumes/Data" if sys.platform == "darwin" else "/"
+    st = os.statvfs(root)
+    out["disk_used"] = (st.f_blocks - st.f_bavail) * st.f_frsize
+    out["disk_total"] = st.f_blocks * st.f_frsize
+    if sys.platform.startswith("linux"):
+        cpu = Path("/proc/stat").read_text().split("\n", 1)[0].split()[1:]
+        ticks = [int(x) for x in cpu]
+        idle = ticks[3] + (ticks[4] if len(ticks) > 4 else 0)  # idle + iowait
+        out["cpu_ticks"] = [sum(ticks) - idle, sum(ticks)]
+        mem = {}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            k, _, v = line.partition(":")
+            mem[k] = int(v.split()[0]) * 1024
+        out["mem_total"] = mem["MemTotal"]
+        out["mem_used"] = mem["MemTotal"] - mem.get("MemAvailable", mem["MemFree"])
+        out["swap_used"] = mem.get("SwapTotal", 0) - mem.get("SwapFree", 0)
+    else:
+        def run(*a):
+            try:
+                return subprocess.run(a, capture_output=True, text=True, timeout=3).stdout
+            except (OSError, subprocess.TimeoutExpired):
+                return ""
+        try:
+            out["cpu_pct"] = sum(float(x) for x in run("ps", "-A", "-o", "%cpu=").split()) / out["cores"]
+        except ValueError:
+            pass
+        try:
+            out["mem_total"] = int(run("sysctl", "-n", "hw.memsize").strip())
+        except ValueError:
+            pass
+        vm = run("vm_stat")
+        page = int((vm.split("page size of ")[1].split()[0]) if "page size of " in vm else 16384)
+        pages = {}
+        for line in vm.splitlines()[1:]:
+            k, _, v = line.partition(":")
+            try:
+                pages[k.strip()] = int(v.strip().rstrip("."))
+            except ValueError:
+                pass
+        # As Activity Monitor counts "Memory Used": app memory + wired + compressed.
+        app = pages.get("Anonymous pages", 0) - pages.get("Pages purgeable", 0)
+        out["mem_used"] = (app + pages.get("Pages wired down", 0) + pages.get("Pages occupied by compressor", 0)) * page
+        sw = run("sysctl", "-n", "vm.swapusage")
+        if "used = " in sw:
+            out["swap_used"] = int(float(sw.split("used = ")[1].split("M")[0]) * 2**20)
+    return out
+
+
+print(json.dumps({"stats": machine_stats()}))
 
 panes = held_by_panes()
 # Extra fork links for sessions omp didn't fork itself (e.g. imported from Claude Code, where a

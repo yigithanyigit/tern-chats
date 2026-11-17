@@ -326,6 +326,67 @@ html.tn-widgets .tn-stage {
 	color: var(--t1);
 }
 
+/* Machine meters on the host header's line, right of the name and left of "+": cpu · mem · disk,
+   each a small dot and a two-digit number. Each sits in the column with zero net height
+   (20px tall, pulled up 22px, 2px below), so the header keeps its height. */
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='meter-'] {
+	position: relative;
+	align-self: flex-end;
+	width: 24px;
+	height: 20px;
+	margin: -22px 0 2px 0 !important;
+	padding: 0 0 0 8px;
+	font-family: var(--mono, ui-monospace, 'SF Mono', Menlo, monospace);
+	font-size: 10.5px;
+	line-height: 20px;
+	text-align: left;
+	color: var(--t3);
+	background: none !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='meter-cpu'] {
+	margin-right: 98px !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='meter-mem'] {
+	margin-right: 68px !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='meter-disk'] {
+	margin-right: 38px !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone^='meter-']::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 8px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: #3fb950;
+	opacity: 0.85;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='-warn']::before {
+	background: #e5a50a;
+	opacity: 1;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='-bad']::before {
+	background: #f85149;
+	opacity: 1;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='-bad'] {
+	color: #f85149;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='-na']::before {
+	background: var(--t3);
+	opacity: 0.4;
+}
+
 /* "▾ Closed 2": folds the host's closed chats. */
 #widgetbar .wg-seg[data-plugin='chats'][data-tone='recent-head'] {
 	margin: 6px 0 2px;
