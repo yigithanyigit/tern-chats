@@ -14,6 +14,10 @@ Each machine's header shows three meters: cpu · mem · disk, as a dot and a per
 from 80%, red from 92%; mem is red once swap is larger than RAM). They come from the same helper
 run as the chat list (a few kernel reads), so they add no load and no extra connection.
 
+Tabs without a chat are listed too, one line each: a terminal by its folder and the command it
+runs (amber while it runs, hollow when the shell waits), other panes by title. "⧉ 2" on a row means
+its tab holds 2 panes, for example a chat with a document beside it.
+
 The sidebar is for desktop windows. In the Tern iOS app the plugin does nothing, so the phone keeps
 its full screen.
 

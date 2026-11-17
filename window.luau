@@ -384,6 +384,19 @@ function rebuild(cx)
 		end
 		local w = tern.kv.get("width") or 248
 		local list = groups[h.id] or {}
+		-- What each tab on this host holds, to show a chat's other panes ("⧉ 2") and the tabs that
+		-- hold no chat at all (plain terminals, documents, browsers).
+		local tab_panes, is_agent = {}, {}
+		for _, a in list do
+			is_agent[a.pane] = true
+		end
+		for _, p in h.panes do
+			local info = cx.session:pane(p)
+			if info and info.tab and not info.parked then
+				tab_panes[info.tab] = tab_panes[info.tab] or {}
+				table.insert(tab_panes[info.tab], info)
+			end
+		end
 		table.sort(list, function(a, b)
 			return a.pane > b.pane
 		end)
@@ -495,6 +508,7 @@ function rebuild(cx)
 			table.insert(entries, {
 				seg = seg, id = session and session.id, parent = session and session.parent or fork_of[a.pane],
 				label = label, sub = sub, tone = (on and "on-" or ""), state = state,
+				panes = info and info.tab and tab_panes[info.tab] and #tab_panes[info.tab] or 1,
 			})
 			chat_slots[n].menu = menu_chip({ host = h.id, item = session, chat = n, sure = sure })
 		end
@@ -510,10 +524,63 @@ function rebuild(cx)
 				open_ids[e.id] = true
 			end
 			local room = w - 44 - 16 * d
-			e.seg.text = oneline(e.label, math.floor(room / 7.4))
-				.. "\n" .. oneline(e.sub, math.floor(room / 6.4))
+			local cut = math.floor(room / 7.4)
+			local name = e.panes > 1 and (oneline(e.label, cut - 4) .. "  ⧉ " .. e.panes) or oneline(e.label, cut)
+			e.seg.text = name .. "\n" .. oneline(e.sub, math.floor(room / 6.4))
 			e.seg.tone = e.tone .. lvl .. e.state
 			table.insert(segs, e.seg)
+		end
+		-- Tabs without a chat: one quiet line each, named by its terminal's folder and what runs
+		-- there (else the first pane's title), with "⧉ N" when it holds several panes.
+		local others = {}
+		for _, ps in tab_panes do
+			local chat = false
+			for _, info in ps do
+				chat = chat or is_agent[info.pane]
+			end
+			if not chat then
+				table.sort(ps, function(a, b)
+					return (a.kind == "terminal") and (b.kind ~= "terminal") or ((a.kind == "terminal") == (b.kind == "terminal") and a.pane < b.pane)
+				end)
+				table.insert(others, ps)
+			end
+		end
+		table.sort(others, function(a, b)
+			return a[1].pane < b[1].pane
+		end)
+		for _, ps in others do
+			if n >= MAX_CHATS then
+				break
+			end
+			local main = ps[1]
+			n += 1
+			local on = false
+			for _, info in ps do
+				on = on or info.pane == focused
+			end
+			if on then
+				focused_slot = n
+			end
+			local label, state
+			if main.kind == "terminal" then
+				local folder = (main.cwd == "" or main.cwd == homes[h.name]) and "~" or base(main.cwd)
+				if main.exited then
+					label, state = folder .. " · exited", "term-gone"
+				elseif main.running and not main.at_prompt then
+					label, state = folder .. " · " .. main.running.line, "term-busy"
+				else
+					label, state = folder, "term-ready"
+				end
+			else
+				label, state = main.title ~= "" and main.title or (main.kind or "pane"), "tab-other"
+			end
+			chat_slots[n] = { pane = main.pane, host = h.id, hostname = h.name, current = h.current, label = label }
+			local cut = math.floor((w - 44) / 7)
+			table.insert(segs, {
+				text = #ps > 1 and (oneline(label, cut - 4) .. "  ⧉ " .. #ps) or oneline(label, cut),
+				tone = (on and "on-" or "") .. state,
+				command = "plugin.chats.go" .. n,
+			})
 		end
 		-- Closed chats: every listed session that isn't open (by id, so a fork with its parent's
 		-- name still shows), as their own tree.

@@ -232,6 +232,48 @@ html.tn-widgets .tn-stage {
 	color: var(--t2);
 }
 
+/* Tabs without a chat (terminals, documents): one quiet line with a small marker in the dot's
+   column: amber while a command runs, hollow when the shell waits, faint when it exited. */
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='term-busy'], [data-tone$='term-ready'], [data-tone$='term-gone'], [data-tone$='tab-other']) {
+	position: relative;
+	margin-top: 1px;
+	padding: 5px 10px 5px 24px;
+	border-radius: 8px;
+	font-size: 12.5px;
+	line-height: 17px;
+	color: var(--t2);
+	white-space: pre;
+}
+
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='term-busy'], [data-tone$='term-ready'], [data-tone$='term-gone'], [data-tone$='tab-other']):hover {
+	background: rgba(255, 255, 255, 0.045) !important;
+}
+
+#widgetbar .wg-seg[data-plugin='chats']:is([data-tone$='term-busy'], [data-tone$='term-ready'], [data-tone$='term-gone'], [data-tone$='tab-other'])::before {
+	content: '';
+	position: absolute;
+	left: 10px;
+	top: 11px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	box-sizing: border-box;
+	border: 1px solid var(--t3);
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='term-busy']::before {
+	border: 0;
+	background: #e5a50a;
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='term-gone'] {
+	color: var(--t3);
+}
+
+#widgetbar .wg-seg[data-plugin='chats'][data-tone$='tab-other']::before {
+	border-radius: 1px;
+}
+
 /* New chat */
 #widgetbar .wg-seg[data-plugin='chats'][data-tone='new'] {
 	display: flex;
