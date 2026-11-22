@@ -14,6 +14,12 @@ Each machine's header shows three meters: cpu · mem · disk, as a dot and a per
 from 80%, red from 92%; mem is red once swap is larger than RAM). They come from the same helper
 run as the chat list (a few kernel reads), so they add no load and no extra connection.
 
+Projects group chats across machines: click a chat → Move to project… (or ⌃⌘G on the chat in
+front), pick one or make a new one. Projects sit above the machines, in your order; click a
+project to fold it, ⋯ to rename, reorder or delete it. A chat keeps its project through restarts
+(it is kept by omp session id), and a fork joins its parent's project. Each row in a project names
+its machine first ("mac · photon · …"). Plugins get no drag and drop in Tern, so moving is a pick.
+
 Tabs without a chat are listed too, one line each: a terminal by its folder and the command it
 runs (amber while it runs, hollow when the shell waits), other panes by title. "⧉ 2" on a row means
 its tab holds 2 panes, for example a chat with a document beside it.

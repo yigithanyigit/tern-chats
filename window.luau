@@ -151,6 +151,36 @@ local gone: { [string]: boolean } = {} -- session ids deleted here; hidden even 
 local pending_fork: { host: number, parent: string, at: number, before: { [number]: boolean } }? = nil
 local fork_pane: { [number]: string } = {} -- pane -> parent session, for forks started here
 
+-- Projects: your own groups of chats across machines, in your order, kept by omp session id so a
+-- chat stays in its project through restarts, /restart and reopening. Unassigned chats stay under
+-- their machine.
+local MAX_PROJECTS = 12
+local projects: { { name: string, folded: boolean? } } = tern.kv.get("projects") or {}
+local assign: { [string]: string } = tern.kv.get("assign") or {} -- session id -> project name
+local proj_slots: { [number]: string } = {}
+
+local function proj_index(name: string?): number?
+	for i, p in projects do
+		if p.name == name then
+			return i
+		end
+	end
+	return nil
+end
+
+-- A chat's project: its own, else its parent's (a fork joins the project it came from).
+local function project_of(id: string?, parent: string?): string?
+	local p = id and assign[id]
+	if not p and parent and assign[parent] then
+		p = assign[parent]
+		if id then
+			assign[id] = p
+			tern.kv.set("assign", assign)
+		end
+	end
+	return proj_index(p) and p or nil
+end
+
 -- Machine meters per host, from the same helper run as the session list (no extra trip):
 -- { cpu, mem, disk = 0..1, swap = bytes }. Linux CPU comes as cumulative ticks; two readings
 -- make a percentage.
@@ -313,6 +343,10 @@ function rebuild(cx)
 	local focused = cx.session:focused()
 	local segs = {}
 	chat_slots, host_slots, focused_slot = {}, {}, nil
+	local proj_rows = {}
+	for _, p in projects do
+		proj_rows[p.name] = { open = {}, closed = {} }
+	end
 	recent_slots, fork_slots = {}, {}
 	local nr, nf = 0, 0
 	local n = 0
@@ -430,6 +464,8 @@ function rebuild(cx)
 			return a.pane > b.pane
 		end)
 		local first_open = #segs + 1
+		-- A project mixes machines, so its rows name theirs first ("mac · photon · …").
+		local hl = h.kind == "local" and (tern.runtime.os == "macos" and "mac" or "local") or short_host(h.name):lower()
 		local entries = {} -- { seg, id, parent } per open chat, to move forks under their parent
 		-- Exact pane -> session claims first, so a title guess never takes a session another pane
 		-- really holds. Sources: omp-recent asked Tern which pane's process holds which file; or the
@@ -560,16 +596,25 @@ function rebuild(cx)
 		local open_ids = {}
 		for _, row in tree(entries) do
 			local e, d = row.node, row.depth
-			local lvl = d > 0 and ("f" .. d .. (row.last and "L" or "") .. "-") or ""
 			if e.id then
 				open_ids[e.id] = true
 			end
+			local p = project_of(e.id, e.parent)
+			local into, sub = segs, e.sub
+			if p then
+				into, sub = proj_rows[p].open, hl .. "  ·  " .. e.sub
+				-- In a project a fork stays indented only under a parent in the same project.
+				if d > 0 and project_of(e.parent, nil) ~= p then
+					d = 0
+				end
+			end
+			local lvl = d > 0 and ("f" .. d .. (row.last and "L" or "") .. "-") or ""
 			local room = w - 44 - 16 * d
 			local cut = math.floor(room / 7.4)
 			local name = e.panes > 1 and (oneline(e.label, cut - 4) .. "  ⧉ " .. e.panes) or oneline(e.label, cut)
-			e.seg.text = name .. "\n" .. oneline(e.sub, math.floor(room / 6.4))
+			e.seg.text = name .. "\n" .. oneline(sub, math.floor(room / 6.4))
 			e.seg.tone = e.tone .. lvl .. e.state
-			table.insert(segs, e.seg)
+			table.insert(into, e.seg)
 		end
 		-- Tabs without a chat: one quiet line each, named by its terminal's folder and what runs
 		-- there (else the first pane's title), with "⧉ N" when it holds several panes.
@@ -625,10 +670,25 @@ function rebuild(cx)
 		end
 		-- Closed chats: every listed session that isn't open (by id, so a fork with its parent's
 		-- name still shows), as their own tree.
-		local closed = {}
+		local closed, shown = {}, 0
 		for _, item in sessions do
-			if #closed < MAX_RECENT and not opened[item.id] and not open_ids[item.id] then
-				table.insert(closed, { id = item.id, parent = item.parent, item = item, title = clean_title(item.title) or base(item.cwd) })
+			if shown < MAX_RECENT and not opened[item.id] and not open_ids[item.id] then
+				shown += 1
+				local p = project_of(item.id, item.parent)
+				if p then
+					-- A closed chat in a project: one dim row in that project.
+					nr += 1
+					recent_slots[nr] = { host = h.id, hostname = h.name, item = item }
+					local room = w - 44
+					table.insert(proj_rows[p].closed, {
+						text = oneline(clean_title(item.title) or base(item.cwd), math.floor(room / 7.4)) .. "\n"
+							.. oneline(hl .. "  ·  " .. base(item.cwd) .. "  ·  " .. ago(item.mtime), math.floor(room / 6.4)),
+						tone = "recent",
+						command = "plugin.chats.more" .. menu_chip({ host = h.id, item = item, recent = nr }),
+					})
+				else
+					table.insert(closed, { id = item.id, parent = item.parent, item = item, title = clean_title(item.title) or base(item.cwd) })
+				end
 			end
 		end
 		local ordered = tree(closed)
@@ -657,6 +717,38 @@ function rebuild(cx)
 	if titles_changed then
 		tern.kv.set("titles", titles)
 	end
+	-- Projects come first: a header (click folds it, ⋯ opens its menu), its open chats, then its
+	-- closed ones. The machines follow with their unassigned chats.
+	local top = {}
+	proj_slots = {}
+	for pi, p in projects do
+		if pi > MAX_PROJECTS then
+			break
+		end
+		proj_slots[pi] = p.name
+		local rows = proj_rows[p.name]
+		local count = #rows.open + #rows.closed
+		table.insert(top, {
+			text = (p.folded and "▸  " or "▾  ") .. p.name .. (p.folded and count > 0 and ("  " .. count) or ""),
+			tone = "proj",
+			command = "plugin.chats.proj" .. pi,
+		})
+		table.insert(top, { text = "⋯", tone = "proj-more", command = "plugin.chats.projmenu" .. pi })
+		if not p.folded then
+			for _, x in rows.open do
+				table.insert(top, x)
+			end
+			for _, x in rows.closed do
+				table.insert(top, x)
+			end
+		end
+	end
+	if #top > 0 then
+		for _, x in segs do
+			table.insert(top, x)
+		end
+		segs = top
+	end
 	-- Shortcut legend, pinned to the bottom by chats.css: a label row, then its key chip on the same line.
 	for i, row in {
 		{ "Hide sidebar", "⌃⌘B", "plugin.chats.toggle" },
@@ -664,6 +756,7 @@ function rebuild(cx)
 		{ "Search chats", "⌃⌘C", "plugin.chats.open" },
 		{ "Rename chat", "⌃⌘R", "plugin.chats.rename" },
 		{ "Fork chat", "⌃⌘F", "plugin.chats.fork_current" },
+		{ "Move to project", "⌃⌘G", "plugin.chats.move_current" },
 		{ "Delete chat", "⌃⌘⌫", "plugin.chats.delete_current" },
 		{ "Close chat", "⌘W ⌘W", "close_pane" },
 	} do
@@ -951,6 +1044,132 @@ for i = 1, MAX_HOSTS do
 	end })
 end
 
+-- Projects ---------------------------------------------------------------------------------------
+
+local function save_projects()
+	tern.kv.set("projects", projects)
+	tern.kv.set("assign", assign)
+end
+
+local function clean(text: string?): string?
+	text = text and (text:gsub("[\r\n]+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+	return text ~= "" and text or nil
+end
+
+-- Pick a project for a chat (by session id), make a new one, or send it back to its machine.
+function move_to(cx, id: string, title: string)
+	local items = {}
+	for _, p in projects do
+		if assign[id] ~= p.name then
+			table.insert(items, { label = p.name, icon = "folder", project = p.name })
+		end
+	end
+	table.insert(items, { label = "New project…", icon = "plus", new = true, group = " " })
+	if assign[id] then
+		table.insert(items, { label = "Back to its machine", icon = "undo", back = true, group = " " })
+	end
+	cx:pick({ placeholder = "Move \"" .. oneline(title, 40) .. "\" to", icon = "folder", action = "choose", items = items })
+		:next(function(item, _err, cx2)
+			if not item or not cx2 then
+				return
+			end
+			if item.new then
+				cx2:prompt({ placeholder = "Project name", icon = "folder", action = "create" }):next(function(text, _e, cx3)
+					local name = clean(text)
+					if not name or not cx3 then
+						return
+					end
+					if not proj_index(name) then
+						if #projects >= MAX_PROJECTS then
+							cx3:toast("info", "Up to " .. MAX_PROJECTS .. " projects")
+							return
+						end
+						table.insert(projects, { name = name })
+					end
+					assign[id] = name
+					save_projects()
+					rebuild(cx3)
+				end)
+				return
+			end
+			assign[id] = item.project -- nil: back to its machine
+			save_projects()
+			rebuild(cx2)
+		end)
+end
+
+for i = 1, MAX_PROJECTS do
+	command({ id = "proj" .. i, title = "Fold project " .. i, available = hidden, run = function(cx)
+		local k = proj_index(proj_slots[i])
+		if k then
+			projects[k].folded = not projects[k].folded or nil
+			save_projects()
+			rebuild(cx)
+		end
+	end })
+	command({ id = "projmenu" .. i, title = "Project menu " .. i, available = hidden, run = function(cx)
+		local name = proj_slots[i]
+		local k = proj_index(name)
+		if not k then
+			return
+		end
+		local items = { { label = "Rename", icon = "pencil", act = "rename" } }
+		if k > 1 then
+			table.insert(items, { label = "Move up", icon = "arrow-up", act = "up" })
+		end
+		if k < #projects then
+			table.insert(items, { label = "Move down", icon = "arrow-down", act = "down" })
+		end
+		table.insert(items, { label = "Delete project", detail = "chats go back to their machine", icon = "trash", act = "delete", tone = "danger", group = " " })
+		cx:pick({ placeholder = name, icon = "folder", action = "run", items = items }):next(function(item, _err, cx2)
+			k = proj_index(name)
+			if not item or not cx2 or not k then
+				return
+			end
+			if item.act == "up" or item.act == "down" then
+				local j = item.act == "up" and k - 1 or k + 1
+				projects[k], projects[j] = projects[j], projects[k]
+			elseif item.act == "delete" then
+				table.remove(projects, k)
+				for id, v in assign do
+					if v == name then
+						assign[id] = nil
+					end
+				end
+			elseif item.act == "rename" then
+				cx2:prompt({ value = name, placeholder = "Project name", icon = "pencil", action = "rename" }):next(function(text, _e, cx3)
+					local new, at = clean(text), proj_index(name)
+					if not new or not cx3 or not at or (new ~= name and proj_index(new)) then
+						return
+					end
+					projects[at].name = new
+					for id, v in assign do
+						if v == name then
+							assign[id] = new
+						end
+					end
+					save_projects()
+					rebuild(cx3)
+				end)
+				return
+			end
+			save_projects()
+			rebuild(cx2)
+		end)
+	end })
+end
+
+command({ id = "move_current", title = "Move chat to project…", icon = "folder", keys = { "ctrl+cmd+g" }, run = function(cx)
+	rebuild(cx)
+	local slot = focused_slot and chat_slots[focused_slot]
+	local m = slot and slot.menu and fork_slots[slot.menu]
+	if not (m and m.item) then
+		cx:toast("info", "Open a chat first", "Or wait a few seconds: a new chat is not saved yet")
+		return
+	end
+	move_to(cx, m.item.id, slot.label)
+end })
+
 for i = 1, MAX_HOSTS * MAX_RECENT do
 	command({ id = "resume" .. i, title = "Resume " .. i, available = hidden, run = function(cx)
 		local r = recent_slots[i]
@@ -984,6 +1203,7 @@ for i = 1, MAX_HOSTS * MAX_RECENT do
 		end
 		if m.item then
 			table.insert(items, { label = "Fork", detail = "F", icon = "branch", act = "fork" })
+			table.insert(items, { label = "Move to project…", detail = "G", icon = "folder", act = "move" })
 		end
 		if m.chat then
 			table.insert(items, { label = "Close", detail = "W", icon = "x", act = "close", group = " " })
@@ -1017,6 +1237,8 @@ for i = 1, MAX_HOSTS * MAX_RECENT do
 					runs["resume" .. m.recent](cx2)
 				elseif item.act == "fork" then
 					runs["fork" .. i](cx2)
+				elseif item.act == "move" then
+					move_to(cx2, m.item.id, title)
 				elseif item.act == "close" then
 					local slot = chat_slots[m.chat]
 					if slot then
